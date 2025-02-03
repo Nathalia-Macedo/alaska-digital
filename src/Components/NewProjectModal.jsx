@@ -31,7 +31,7 @@ function NovoProjetoModal({ isOpen, onClose, onCreateProject }) {
     setError("")
     setIsLoading(true)
 
-    const ownerId = localStorage.getItem("userId")
+    const ownerId = localStorage.getItem("userID")
     if (!ownerId) {
       setError("ID do usuário não encontrado. Por favor, faça login novamente.")
       setIsLoading(false)

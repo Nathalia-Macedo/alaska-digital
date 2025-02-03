@@ -36,11 +36,13 @@ function Login() {
       const data = await response.json()
       console.log("Login bem-sucedido:", data)
       localStorage.setItem("username", data.username) // Updated line to store username
-
+      localStorage.setItem("userID", data.data)
       // Aqui você pode salvar o token no localStorage se a API retornar um
       if (data.token) {
         localStorage.setItem("token", data.token)
       }
+
+    
 
       // Redireciona para o dashboard após login bem-sucedido
       navigate("/dashboard")
