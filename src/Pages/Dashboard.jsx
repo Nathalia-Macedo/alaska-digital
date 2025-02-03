@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { Edit2, Trash2, Search, Calendar, Filter } from "lucide-react"
 import NovoProjetoModal from "../Components/NewProjectModal"
@@ -41,23 +41,12 @@ function Dashboard() {
   const [projectToEdit, setProjectToEdit] = useState(null)
   const [username, setUsername] = useState("")
   const navigate = useNavigate()
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: "asc",
+  })
 
-  useEffect(() => {
-    const storedUsername = localStorage.getItem("username")
-    if (storedUsername) {
-      setUsername(storedUsername)
-    } else {
-      // Redirect to login if username is not found
-      navigate("/login")
-    }
-    fetchProjects()
-  }, [navigate])
-
-  useEffect(() => {
-    applyFilters()
-  }, [projects, filters]) //Corrected dependency array
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const response = await fetch("https://alaskapi.onrender.com/projects")
       if (!response.ok) throw new Error("Falha ao carregar projetos")
@@ -69,7 +58,22 @@ function Dashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    const storedUsername = localStorage.getItem("username")
+    if (storedUsername) {
+      setUsername(storedUsername)
+      fetchProjects()
+    } else {
+      // Redirect to login if username is not found
+      navigate("/login")
+    }
+  }, [navigate, fetchProjects])
+
+  useEffect(() => {
+    applyFilters()
+  }, [projects, filters]) //Corrected dependency array
 
   const handleCreateProject = (newProject) => {
     const formattedProject = {
@@ -161,11 +165,84 @@ function Dashboard() {
     setFilteredProjects(filteredProjects.map((p) => (p.id === updatedProject.id ? updatedProject : p)))
   }
 
+  const sortProjects = (projects, sortConfig) => {
+    if (!sortConfig.key) return projects
+
+    return [...projects].sort((a, b) => {
+      if (sortConfig.key === "clientName") {
+        return sortConfig.direction === "asc"
+          ? a.clientName.localeCompare(b.clientName)
+          : b.clientName.localeCompare(a.clientName)
+      }
+      if (sortConfig.key === "createdAt" || sortConfig.key === "updatedAt") {
+        return sortConfig.direction === "asc"
+          ? new Date(a[sortConfig.key]) - new Date(b[sortConfig.key])
+          : new Date(b[sortConfig.key]) - new Date(a[sortConfig.key])
+      }
+      return 0
+    })
+  }
+
+  const handleSort = (key) => {
+    setSortConfig((prevConfig) => ({
+      key,
+      direction: prevConfig.key === key && prevConfig.direction === "asc" ? "desc" : "asc",
+    }))
+  }
+
+  useEffect(() => {
+    const sorted = sortProjects(filteredProjects, sortConfig)
+    setFilteredProjects(sorted)
+  }, [sortConfig, filteredProjects])
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500"></div>
       </div>
+    )
+  }
+
+  const SortIcon = ({ column }) => {
+    if (sortConfig.key !== column) {
+      return (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="h-4 w-4 text-gray-400 ml-1"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+        >
+          <path d="M5 12a1 1 0 102 0V6.414l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L5 6.414V12zM15 8a1 1 0 10-2 0v5.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L15 13.586V8z" />
+        </svg>
+      )
+    }
+
+    return sortConfig.direction === "asc" ? (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-4 w-4 text-sky-500 ml-1"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path
+          fillRule="evenodd"
+          d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z"
+          clipRule="evenodd"
+        />
+      </svg>
+    ) : (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="h-4 w-4 text-sky-500 ml-1"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+      >
+        <path
+          fillRule="evenodd"
+          d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+          clipRule="evenodd"
+        />
+      </svg>
     )
   }
 
@@ -314,9 +391,13 @@ function Dashboard() {
                     <tr>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort("clientName")}
                       >
-                        Cliente
+                        <div className="flex items-center">
+                          Cliente
+                          <SortIcon column="clientName" />
+                        </div>
                       </th>
                       <th
                         scope="col"
@@ -332,15 +413,23 @@ function Dashboard() {
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort("createdAt")}
                       >
-                        Criado em
+                        <div className="flex items-center">
+                          Criado em
+                          <SortIcon column="createdAt" />
+                        </div>
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                        onClick={() => handleSort("updatedAt")}
                       >
-                        Atualizado em
+                        <div className="flex items-center">
+                          Atualizado em
+                          <SortIcon column="updatedAt" />
+                        </div>
                       </th>
                       <th
                         scope="col"
@@ -357,7 +446,7 @@ function Dashboard() {
                           <div className="text-sm font-medium text-gray-900">{project.clientName}</div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900 max-w-xs truncate">{project.description}</div>
+                          <div className="text-sm text-gray-900 whitespace-pre-wrap">{project.description}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <StatusBadge status={project.status} />
